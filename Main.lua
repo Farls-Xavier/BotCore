@@ -2,6 +2,7 @@ local BotCore = {} -- I will add a gui version for bridged connections later on(
 
 local Players = game:GetService("Players")
 
+local TeleportService = game:GetService("TeleportService")
 local TextChatService = game:GetService("TextChatService")
 
 local function validate(defaults, args)
@@ -53,6 +54,24 @@ function BotCore.new(params)
         return Bot.Whitelisted[user.UserId].Rank
     end
 
+    function Bot:GetCommand(command)
+        local lowered = command:lower()
+
+        if Bot.Commands[lowered] then
+            return Bot.Commands[lowered]
+        end
+
+        for _, commandData in Bot.Commands do
+            for _, alias in commandData.Aliases do
+                if alias:lower() == lowered then
+                    return commandData
+                end
+            end
+        end
+
+        return nil
+    end
+
     function Bot.CreateCommand(name : string, aliases : table, requiredRank : number, callback)
         local data = {
             Name = name, -- The name of the command
@@ -65,12 +84,6 @@ function BotCore.new(params)
         }
 
         Bot.Commands[name:lower()] = data
-
-        if #aliases > 0 then
-            for _, alias in aliases do
-                Bot.Commands[alias:lower()] = data
-            end
-        end
     end
 
     function Bot.AddUser(user : Player, rank)
@@ -96,12 +109,12 @@ function BotCore.new(params)
             local command = args[1]
             table.remove(args, 1)
             
-            local commandData = Bot.Commands[command]
+            local commandData = Bot:GetCommand(command)
 
             if commandData then
                 if Bot:GetUserRank(user) <= commandData.RequiredRank and Bot.Whitelisted[user.UserId] ~= nil then
                     commandData.Callback(user, args)
-                    Bot.LogCommand(user, commandData.Name, os.date("%Y-%m-%d %H:%M:%S"), table.concat(args, ", "))
+                    Bot.LogCommand(user, commandData.Name, os.date("%H:%M:%S"), table.concat(args, ", "))
                 else
                     warn("User (", user.DisplayName, ") does not meet the required rank for this command (", commandData.Name, ")")
                 end
@@ -171,6 +184,24 @@ function BotCore.new(params)
         for i,v in pairs(Bot.Log) do
             print(i .. ": command = " .. v.Name .. ", args = " .. v.Args)            
         end
+    end)
+
+    Bot.CreateCommand("whois", {"userinfo", "id", "pinfo"}, 5, function(sender, args)
+        -- I will make it private message it soon, first I need to figure out how to make it private message...
+
+        local user = FindPlayerByDisplayName(args[1])
+        
+        local friendsWith = user:IsFriendsWith(sender.UserId)
+
+        print(user.DisplayName, ":", "Rank =", Bot:GetUserRank(user), ":", "friendsWith =", friendsWith)
+    end)
+
+    Bot.CreateCommand("rejoin", {"rj"}, 1, function(sender, args)
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Bot.Bot)
+    end)
+
+    Bot.CreateCommand("shutdown", {"exit", "close"}, 1, function(sender, args)
+        game:Shutdown()
     end)
 
     return Bot
